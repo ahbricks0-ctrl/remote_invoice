@@ -66,25 +66,26 @@ const InputField = ({ label, name, value, onChange, error, placeholder, type = '
 export default function InvoiceApp() {
   const [step, setStep] = useState(1);
   const [alert, setAlert] = useState({ show: false, type: '', title: '', message: '' });
-  const [formData, setFormData] = useState({
-    quantity: '',
-    price_after_tax: '',
-    sgst_percent: '',
-    cgst_percent: '',
-    igst_percent: '',
+  const initial_data = {
+    quantity: '1250',
+    price_after_tax: '4',
+    sgst_percent: '6',
+    cgst_percent: '6',
+    igst_percent: '0',
     vehicle_no: '',
     gstin: '',
     is_shipping_same_as_billing: true,
     billing_name: '',
-    billing_addr_line1: '',
-    billing_addr_line2: '',
-    billing_state_code: '',
+    billing_addr_line1: 'Bisra',
+    billing_addr_line2: 'Sundergarh',
+    billing_state_code: 'Odisha, 770036',
     shipping_name: '',
     shipping_addr_line1: '',
     shipping_addr_line2: '',
     shipping_state_code: '',
     password: ''
-  });
+  }
+  const [formData, setFormData] = useState(initial_data);
   
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -196,12 +197,7 @@ export default function InvoiceApp() {
         });
         setTimeout(() => {
           setStep(1);
-          setFormData({
-            quantity: '', price_after_tax: '', sgst_percent: '', cgst_percent: '',
-            igst_percent: '', vehicle_no: '', gstin: '', is_shipping_same_as_billing: true,
-            billing_name: '', billing_addr_line1: '', billing_addr_line2: '', billing_state_code: '',
-            shipping_name: '', shipping_addr_line1: '', shipping_addr_line2: '', shipping_state_code: ''
-          });
+          setFormData(initial_data);
         }, 2000);
       } else {
         throw new Error('API request failed');
@@ -303,7 +299,7 @@ export default function InvoiceApp() {
                 </div>
 
                 {/* Tax Details */}
-                <div className="bg-green-50 p-4 rounded-lg">
+                {/* <div className="bg-green-50 p-4 rounded-lg">
                   <h3 className="text-lg font-bold text-gray-800 mb-4">Tax Information</h3>
                   <div className="grid md:grid-cols-3 gap-4">
                     <InputField
@@ -334,7 +330,7 @@ export default function InvoiceApp() {
                       type="number"
                     />
                   </div>
-                </div>
+                </div> */}
 
                 {/* Shipping Details */}
                 <div className="bg-purple-50 p-4 rounded-lg">
