@@ -68,7 +68,7 @@ export default function InvoiceApp() {
   const [alert, setAlert] = useState({ show: false, type: '', title: '', message: '' });
   const initial_data = {
     quantity: '1250',
-    price_after_tax: '4',
+    price_after_tax: '3.2',
     sgst_percent: '6',
     cgst_percent: '6',
     igst_percent: '0',
@@ -464,6 +464,7 @@ export default function InvoiceApp() {
                   onChange={handleChange}
                   error={errors.password}
                   placeholder="******"
+                  type='password'
                 />
 
                 <button
