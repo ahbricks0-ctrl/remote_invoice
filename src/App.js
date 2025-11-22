@@ -63,10 +63,23 @@ const InputField = ({ label, name, value, onChange, error, placeholder, type = '
   </div>
 );
 
+
+const get_date_string = () => {
+  // 25/11/2025
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  let mm = today.getMonth() + 1; // Months start at 0!
+  let dd = today.getDate();
+  if (dd < 10) dd = '0' + dd;
+  if (mm < 10) mm = '0' + mm;
+  return dd + '/' + mm + '/' + yyyy;
+};
+
 export default function InvoiceApp() {
   const [step, setStep] = useState(1);
   const [alert, setAlert] = useState({ show: false, type: '', title: '', message: '' });
   const initial_data = {
+    date: get_date_string(),
     quantity: '1250',
     price_after_tax: '3.2',
     sgst_percent: '6',
@@ -170,7 +183,7 @@ export default function InvoiceApp() {
 
   const handleSubmit = async () => {
     setLoading(true);
-    const payload = {
+    let payload = {
       ...formData,
       quantity: Number(formData.quantity),
       price_after_tax: Number(formData.price_after_tax),
@@ -178,6 +191,13 @@ export default function InvoiceApp() {
       cgst_percent: Number(formData.cgst_percent),
       igst_percent: Number(formData.igst_percent)
     };
+
+    if (payload.is_shipping_same_as_billing) {
+      payload.shipping_name = '';
+      payload.shipping_addr_line1 = '';
+      payload.shipping_addr_line2 = '';
+      payload.shipping_state_code = '';
+    }
 
     try {
       // Replace with your actual API endpoint
@@ -278,6 +298,25 @@ export default function InvoiceApp() {
                   </h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     <InputField
+                      label="Date"
+                      name="date"
+                      value={formData.date}
+                      onChange={handleChange}
+                      error={errors.date}
+                      placeholder="25/11/2025"
+                    />
+                    {/* <InputField
+                      label="Price After Tax (₹)"
+                      name="price_after_tax"
+                      value={formData.price_after_tax}
+                      onChange={handleChange}
+                      error={errors.price_after_tax}
+                      placeholder="4.00"
+                      type="number"
+                    /> */}
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <InputField
                       label="Quantity"
                       name="quantity"
                       value={formData.quantity}
@@ -333,7 +372,7 @@ export default function InvoiceApp() {
                 </div> */}
 
                 {/* Shipping Details */}
-                <div className="bg-purple-50 p-4 rounded-lg">
+                {formData.is_shipping_same_as_billing && <div className="bg-purple-50 p-4 rounded-lg">
                   <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <Truck className="w-5 h-5 mr-2 text-purple-600" />
                     Shipping Details
@@ -357,7 +396,7 @@ export default function InvoiceApp() {
                       required={false}
                     />
                   </div>
-                </div>
+                </div>}
 
                 {/* Billing Address */}
                 <div className="bg-orange-50 p-4 rounded-lg">
@@ -484,6 +523,7 @@ export default function InvoiceApp() {
                   <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg">
                     <h3 className="font-bold text-gray-800 mb-3">Product Information</h3>
                     <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div><span className="font-semibold">Date:</span> {formData.date}</div>
                       <div><span className="font-semibold">Quantity:</span> {formData.quantity}</div>
                       <div><span className="font-semibold">Price After Tax:</span> ₹{formData.price_after_tax}</div>
                       <div><span className="font-semibold">SGST:</span> {formData.sgst_percent}%</div>
@@ -520,6 +560,15 @@ export default function InvoiceApp() {
                       <p>{formData.shipping_state_code}</p>
                     </div>
                   </div>
+                  
+                  {formData.is_shipping_same_as_billing && <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg">
+                    <h3 className="font-bold text-gray-800 mb-3">Status (Experimental)</h3>
+                    <div className="text-sm">
+                      <div><span className="font-semibold">Battery:</span> {"25%"}</div>
+                      <div><span className="font-semibold">Network:</span> {"Connected"}</div>
+                      <div><span className="font-semibold">Printer:</span> {"Connected"}</div>
+                    </div>
+                  </div>}
                 </div>
 
                 <div className="flex gap-4 mt-6">
