@@ -105,6 +105,8 @@ export default function InvoiceApp() {
 
   const validateField = (name, value) => {
     switch (name) {
+      case 'date':
+        return !value ? 'Date is required' : !/^\d{2}\/\d{2}\/\d{4}$/.test(value) ? 'Date must be in DD/MM/YYYY format' : '';
       case 'quantity':
         return !value ? 'Quantity is required' : value <= 0 ? 'Quantity must be positive' : '';
       case 'price_after_tax':
