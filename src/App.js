@@ -76,9 +76,21 @@ const get_date_string = () => {
 };
 
 export default function InvoiceApp() {
+  const API_BASE = 'https://supplier-affix-storable.ngrok-free.dev';
+
+  const [authenticated, setAuthenticated] = useState(false);
+  const [apiPassword, setApiPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  const [serverStatus, setServerStatus] = useState(null);
+  const [latestInvoice, setLatestInvoice] = useState(null);
+
+
   const [step, setStep] = useState(1);
   const [alert, setAlert] = useState({ show: false, type: '', title: '', message: '' });
   const initial_data = {
+    invoice_no: '',
     date: get_date_string(),
     quantity: '1250',
     price_after_tax: '3.2',
@@ -95,8 +107,7 @@ export default function InvoiceApp() {
     shipping_name: '',
     shipping_addr_line1: '',
     shipping_addr_line2: '',
-    shipping_state_code: '',
-    password: ''
+    shipping_state_code: ''
   }
   const [formData, setFormData] = useState(initial_data);
   
@@ -105,6 +116,8 @@ export default function InvoiceApp() {
 
   const validateField = (name, value) => {
     switch (name) {
+      case 'invoice_no':
+        return !value ? 'Invoice number is required' : !/\d+/.test(value) ? 'Invoice number must be numeric' : '';
       case 'date':
         return !value ? 'Date is required' : !/^\d{2}\/\d{2}\/\d{4}$/.test(value) ? 'Date must be in DD/MM/YYYY format' : '';
       case 'quantity':
@@ -130,11 +143,72 @@ export default function InvoiceApp() {
       case 'shipping_addr_line2':
       case 'shipping_state_code':
         return !value && !formData.is_shipping_same_as_billing ? 'This field is required' : '';
-      case 'password':
-        return !value ? 'Password is required' : '';
       default:
         return '';
     }
+  };
+
+  const handleAuthentication = async () => {
+    if (!apiPassword.trim()) {
+      setAuthError('Password is required');
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      // Fetch latest invoice
+      const invoiceResponse = await apiRequest('/latest_invoice');
+
+      const latest = Number(invoiceResponse.data);
+
+      if (!Number.isFinite(latest)) {
+        throw new Error('Invalid latest invoice received from server');
+      }
+
+      setLatestInvoice(latest);
+
+      // Populate next invoice number
+      setFormData(prev => ({
+        ...prev,
+        invoice_no: String(latest + 1)
+      }));
+
+      // Fetch server status
+      const statusResponse = await apiRequest('/status');
+      setServerStatus(statusResponse);
+
+      // Authentication successful
+      setAuthenticated(true);
+
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const apiRequest = async (endpoint, options = {}) => {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'X-Password-Invoice': apiPassword,
+        'ngrok-skip-browser-warning': true,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {})
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('The server is unreachable');
+      }
+
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    return response.json();
   };
 
   const handleChange = (e) => {
@@ -184,63 +258,121 @@ export default function InvoiceApp() {
   };
 
   const handleSubmit = async () => {
-    setLoading(true);
-    let payload = {
-      ...formData,
-      quantity: Number(formData.quantity),
-      price_after_tax: Number(formData.price_after_tax),
-      sgst_percent: Number(formData.sgst_percent),
-      cgst_percent: Number(formData.cgst_percent),
-      igst_percent: Number(formData.igst_percent)
-    };
+  setLoading(true);
 
-    if (payload.is_shipping_same_as_billing) {
-      payload.shipping_name = '';
-      payload.shipping_addr_line1 = '';
-      payload.shipping_addr_line2 = '';
-      payload.shipping_state_code = '';
-    }
-
-    try {
-      // Replace with your actual API endpoint
-      console.log(payload);
-      const response = await fetch('https://selfsustainingly-intarsiate-kirsten.ngrok-free.dev/print_invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        setAlert({
-          show: true,
-          type: 'success',
-          title: 'Success!',
-          message: 'Invoice submitted successfully!'
-        });
-        setTimeout(() => {
-          setStep(1);
-          setFormData(initial_data);
-        }, 2000);
-      } else {
-        throw new Error('API request failed');
-      }
-    } catch (error) {
-      setAlert({
-        show: true,
-        type: 'error',
-        title: 'Error',
-        message: `Failed to submit invoice: ${error.message}`
-      });
-    }
-    finally {
-      // setTimeout(() => {
-      //   setAlert({ show: false, type: '', title: '', message: '' });
-      // }, 3000);
-      setLoading(false);
-    }
+  let payload = {
+    ...formData,
+    quantity: Number(formData.quantity),
+    price_after_tax: Number(formData.price_after_tax),
+    sgst_percent: Number(formData.sgst_percent),
+    cgst_percent: Number(formData.cgst_percent),
+    igst_percent: Number(formData.igst_percent)
   };
 
+  if (payload.is_shipping_same_as_billing) {
+    payload.shipping_name = '';
+    payload.shipping_addr_line1 = '';
+    payload.shipping_addr_line2 = '';
+    payload.shipping_state_code = '';
+  }
+
+  try {
+    const response = await apiRequest('/print_invoice', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    setAlert({
+      show: true,
+      type: 'success',
+      title: 'Success!',
+      message: response.message || 'Invoice submitted successfully!'
+    });
+
+    setTimeout(() => {
+      setStep(1);
+
+      setFormData(prev => ({
+        ...initial_data,
+        invoice_no: String(Number(prev.invoice_no) + 1)
+      }));
+
+      // Refresh latest invoice and server status
+      apiRequest('/latest_invoice').then(res => {
+        setLatestInvoice(Number(res.data));
+      }).catch(console.error);
+
+      apiRequest('/status').then(res => {
+        setServerStatus(res);
+      }).catch(console.error);
+
+    }, 2000);
+
+  } catch (error) {
+    setAlert({
+      show: true,
+      type: 'error',
+      title: 'Error',
+      message: error.message
+    });
+
+  } finally {
+    setLoading(false);
+  }
+};
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+
+          <div className="text-center mb-8">
+            <FileText className="w-14 h-14 mx-auto text-blue-600 mb-4" />
+
+            <h1 className="text-2xl font-bold text-gray-800">
+              Invoice Generator
+            </h1>
+
+            <p className="text-gray-500 mt-2">
+              Authenticate with the invoice server
+            </p>
+          </div>
+
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Server Password
+          </label>
+
+          <input
+            type="password"
+            value={apiPassword}
+            onChange={e => setApiPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAuthentication()}
+            placeholder="Enter password"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 outline-none"
+          />
+
+          {authError && (
+            <p className="text-red-600 text-sm mt-3">
+              {authError}
+            </p>
+          )}
+
+          <button
+            onClick={handleAuthentication}
+            disabled={authLoading}
+            className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50"
+          >
+            {authLoading ? 'Connecting...' : 'Connect to Server'}
+          </button>
+
+        </div>
+      </div>
+    );
+  }
+
   return (
+    
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
       <style>{`
         @keyframes scale-in {
@@ -251,6 +383,101 @@ export default function InvoiceApp() {
           animation: scale-in 0.3s ease-out;
         }
       `}</style>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-gray-50">
+
+  <div className="bg-white p-4 rounded-lg shadow-sm">
+    <p className="text-sm text-gray-500">Server</p>
+    <p className="font-bold flex items-center gap-2">
+      <span className={`w-2 h-2 rounded-full ${
+        serverStatus?.status === 'online'
+          ? 'bg-green-500'
+          : 'bg-red-500'
+      }`} />
+      {serverStatus?.status || 'Unknown'}
+    </p>
+  </div>
+
+  <div className="bg-white p-4 rounded-lg shadow-sm">
+    <p className="text-sm text-gray-500">Printer</p>
+    <p className="font-bold">
+      {serverStatus?.printer?.name || 'Unknown'}
+    </p>
+    <p className="text-xs text-gray-500">
+      {serverStatus?.printer?.status || 'Unknown'}
+    </p>
+  </div>
+
+  <div className="bg-white p-4 rounded-lg shadow-sm">
+    <p className="text-sm text-gray-500">Last Invoice</p>
+    <p className="font-bold">
+      {latestInvoice ?? 'Loading...'}
+    </p>
+  </div>
+
+  {formData.is_shipping_same_as_billing && serverStatus && (
+  <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg">
+    <h3 className="font-bold text-gray-800 mb-3">
+      System Status
+    </h3>
+
+    <div className="grid grid-cols-2 gap-3 text-sm">
+
+      {/* Server */}
+      <div>
+        <span className="font-semibold">Server:</span>{" "}
+        {serverStatus.server.status}
+      </div>
+
+      {/* Battery */}
+      <div>
+        <span className="font-semibold">Battery:</span>{" "}
+        {serverStatus.system.battery.percentage}%
+        {serverStatus.system.battery.plugged && " (Plugged)"}
+      </div>
+
+      {/* Network */}
+      <div>
+        <span className="font-semibold">Network:</span>{" "}
+        {serverStatus.status}
+      </div>
+
+      {/* Printer */}
+      <div>
+        <span className="font-semibold">Printer:</span>{" "}
+        {serverStatus.printer.name} - {serverStatus.printer.status}
+      </div>
+
+      {/* CPU */}
+      <div>
+        <span className="font-semibold">CPU:</span>{" "}
+        {serverStatus.system.cpu_percent}%
+      </div>
+
+      {/* RAM */}
+      <div>
+        <span className="font-semibold">RAM:</span>{" "}
+        {serverStatus.system.ram.percentage}% 
+        ({serverStatus.system.ram.available_gb} GB free)
+      </div>
+
+      {/* Disk */}
+      <div>
+        <span className="font-semibold">Disk:</span>{" "}
+        {serverStatus.system.disk.free_gb} GB free
+      </div>
+
+      {/* Printer Jobs */}
+      <div>
+        <span className="font-semibold">Print Jobs:</span>{" "}
+        {serverStatus.printer.jobs}
+      </div>
+
+    </div>
+  </div>
+)}
+
+</div>
       
       <SweetAlert {...alert} onClose={() => setAlert({ ...alert, show: false })} />
       
@@ -299,6 +526,15 @@ export default function InvoiceApp() {
                     Product Details
                   </h3>
                   <div className="grid md:grid-cols-2 gap-4">
+                    <InputField
+                      label="Invoice Number"
+                      name="invoice_no"
+                      value={formData.invoice_no}
+                      onChange={handleChange}
+                      error={errors.invoice_no}
+                      placeholder="1234"
+                      type="number"
+                    />
                     <InputField
                       label="Date"
                       name="date"
@@ -498,15 +734,7 @@ export default function InvoiceApp() {
                     </div>
                   </div>
                 )}
-                <InputField
-                  label="Password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  error={errors.password}
-                  placeholder="******"
-                  type='password'
-                />
+                
 
                 <button
                   onClick={handleNext}
@@ -563,14 +791,67 @@ export default function InvoiceApp() {
                     </div>
                   </div>
                   
-                  {formData.is_shipping_same_as_billing && <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg">
-                    <h3 className="font-bold text-gray-800 mb-3">Status (Experimental)</h3>
-                    <div className="text-sm">
-                      <div><span className="font-semibold">Battery:</span> {"25%"}</div>
-                      <div><span className="font-semibold">Network:</span> {"Connected"}</div>
-                      <div><span className="font-semibold">Printer:</span> {"Connected"}</div>
-                    </div>
-                  </div>}
+                  {formData.is_shipping_same_as_billing && serverStatus && (
+  <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg">
+    <h3 className="font-bold text-gray-800 mb-3">
+      System Status
+    </h3>
+
+    <div className="grid grid-cols-2 gap-3 text-sm">
+
+      {/* Server */}
+      <div>
+        <span className="font-semibold">Server:</span>{" "}
+        {serverStatus.server.status}
+      </div>
+
+      {/* Battery */}
+      <div>
+        <span className="font-semibold">Battery:</span>{" "}
+        {serverStatus.system.battery.percentage}%
+        {serverStatus.system.battery.plugged && " (Plugged)"}
+      </div>
+
+      {/* Network */}
+      <div>
+        <span className="font-semibold">Network:</span>{" "}
+        {serverStatus.status}
+      </div>
+
+      {/* Printer */}
+      <div>
+        <span className="font-semibold">Printer:</span>{" "}
+        {serverStatus.printer.name} - {serverStatus.printer.status}
+      </div>
+
+      {/* CPU */}
+      <div>
+        <span className="font-semibold">CPU:</span>{" "}
+        {serverStatus.system.cpu_percent}%
+      </div>
+
+      {/* RAM */}
+      <div>
+        <span className="font-semibold">RAM:</span>{" "}
+        {serverStatus.system.ram.percentage}% 
+        ({serverStatus.system.ram.available_gb} GB free)
+      </div>
+
+      {/* Disk */}
+      <div>
+        <span className="font-semibold">Disk:</span>{" "}
+        {serverStatus.system.disk.free_gb} GB free
+      </div>
+
+      {/* Printer Jobs */}
+      <div>
+        <span className="font-semibold">Print Jobs:</span>{" "}
+        {serverStatus.printer.jobs}
+      </div>
+
+    </div>
+  </div>
+)}
                 </div>
 
                 <div className="flex gap-4 mt-6">
